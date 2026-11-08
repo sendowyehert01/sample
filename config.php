@@ -1,5 +1,9 @@
 <?php
 
+if (is_file(__DIR__ . '/.env')) {
+    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
+}
+
 $env = static function (string $key, string $default = ''): string {
     $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
 

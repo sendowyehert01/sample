@@ -1,13 +1,15 @@
 # PHP CRUD API Template
 
-An API-only PHP project using OOP controllers, repositories, constructor injection, and the Eloquent ORM. The example resource is a sample with `id`, `name`, and `description` fields. All routes are public, and responses are JSON. There are no views, no authentication, and no sessions.
+An API-only PHP project using OOP controllers, repositories, constructor injection, the Eloquent ORM, and Phinx migrations. The example resource is a sample with `id`, `name`, and `description` fields. All routes are public, and responses are JSON. There are no views, no authentication, and no sessions.
+
+Phinx is maintained by CakePHP and uses its database library. Eloquent handles application queries; Phinx handles schema changes. This project uses the standalone `robmorgan/phinx` package, so it does not need the CakePHP application framework or the `cakephp/migrations` plugin.
 
 Treat the `sample` resource as a worked example: keep the structure, rename it, and swap in your own fields and table.
 
 ## Requirements
 
-- PHP 8.2 or newer with `PDO` and `pdo_mysql` enabled.
-- [Composer](https://getcomposer.org/) to install the Eloquent ORM.
+- 64-bit PHP 8.2 or newer with `PDO` and `pdo_mysql` enabled.
+- [Composer](https://getcomposer.org/) to install Eloquent and Phinx.
 - A running MySQL 8.x server or a compatible MariaDB server.
 - `pdo_sqlite` to run the automated tests.
 
@@ -40,32 +42,70 @@ If `mysql` is not on `PATH`, run its executable directly in PowerShell, adjustin
 At the MySQL prompt, run:
 
 ```sql
-SOURCE database/schema.sql;
+CREATE DATABASE IF NOT EXISTS crud_demo
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
 ```
 
-Alternatively, open and execute [database/schema.sql](database/schema.sql) in MySQL Workbench or phpMyAdmin. It creates the `crud_demo` database and a `samples` table, including the `created_at` and `updated_at` columns Eloquent maintains automatically.
+Alternatively, execute this statement in HeidiSQL, MySQL Workbench, or phpMyAdmin. Phinx creates the tables in step 3; schema changes are defined in `database/migrations`.
 
 ## 2. Configure the connection
 
-Edit [config.php](config.php) to match your MySQL host, port, database name, username, and password. Defaults are:
+For a new checkout, copy `.env.example` to `.env` and edit the connection settings:
 
-```php
-'database' => [
-    'driver' => 'mysql',
-    'host' => 'localhost',
-    'port' => 3306,
-    'database' => 'crud_demo',
-    'username' => 'root',
-    'password' => '',
-    'charset' => 'utf8mb4',
-    'collation' => 'utf8mb4_unicode_ci',
-    'prefix' => '',
-],
+```dotenv
+DB_DRIVER=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=crud_demo
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+DB_CHARSET=utf8mb4
+DB_COLLATION=utf8mb4_unicode_ci
+DB_PREFIX=
 ```
 
-Set `password` to your actual MySQL password. Leave it empty only if that database account has no password. `bootstrap.php` hands this array straight to Eloquent's connection manager, so any key Eloquent supports works here.
+Set `DB_PASSWORD` to your actual MySQL password. Leave it empty only if that database account has no password. Both the API and migration CLI use [config.php](config.php), which loads `.env` and supplies their shared database settings and table prefix. Environment values take precedence over the defaults in that file. `.env` is excluded from Git.
 
-## 3. Start the API
+## 3. Run migrations
+
+From the project directory, run:
+
+```sh
+composer migrate
+composer migrate:status
+```
+
+The initial migration creates `samples`, including Eloquent's nullable `created_at` and `updated_at` columns. Phinx records applied versions in `phinxlog` and skips them on later runs. `DB_PREFIX` applies to resource tables and the migration history table.
+
+To create another migration:
+
+```sh
+composer make:migration -- add_sample_status
+```
+
+Use snake_case migration names. Phinx adds a timestamp prefix to create a filename such as `20261108120000_add_sample_status.php` and uses the PHP class `AddSampleStatus` to load it. The existing `20261108000000_create_samples_table.php` follows the same filename format.
+
+Edit the generated PHP class in `database/migrations`, then run `composer migrate`. Use Phinx's `change()` method for automatically reversible schema operations, or `up()` and `down()` when you need explicit behavior. See the [Phinx migration documentation](https://book.cakephp.org/phinx/0/en/migrations.html).
+
+To reverse the most recently applied migration:
+
+```sh
+composer migrate:rollback
+```
+
+Rolling back `CreateSamplesTable` drops the `samples` table and its data. Commands accept Phinx options after `--`, such as `composer migrate -- --dry-run`.
+
+If you already have a `samples` table, first verify its structure matches the [initial migration](database/migrations/20261108000000_create_samples_table.php). Record just that version as applied without executing its table creation:
+
+```sh
+composer migrate -- --target=20261108000000 --fake
+composer migrate:status
+```
+
+Future migration runs then apply only newer versions. The baseline command preserves existing sample data.
+
+## 4. Start the API
 
 Run this command from the project directory:
 
@@ -171,7 +211,7 @@ When several fields fail at once, every failing field appears as a key in `error
 ## Use this as a CRUD template
 
 1. Copy `Models/Sample.php`, `SampleController`, `SampleRepository`, and `SampleValidator` for your new resource, then rename the classes and update their fields.
-2. Add the new table to `database/schema.sql` and run its SQL. A new model picks up the table by naming convention, or set `protected $table` explicitly as `Sample` does.
+2. Generate a migration with `composer make:migration -- create_widgets_table`, define the new table, and run `composer migrate`. A new model picks up the table by naming convention, or set `protected $table` explicitly as `Sample` does.
 3. Register the new validator, repository, and controller in `bootstrap.php`.
 4. Add routes in `routes.php` using the same collection and `/resource/{id}` pattern, then adapt the tests for the new fields.
 
@@ -184,26 +224,28 @@ Eloquent is booted once in `bootstrap.php` through its `Capsule` manager, which 
 Enable `pdo_sqlite` and run:
 
 ```sh
-php tests/run.php
+composer test
 ```
 
-The suite uses an in-memory SQLite database and checks CRUD, JSON bodies, HTTP statuses, field validation, missing IDs, allowed methods, and error responses. It does not use your MySQL database. PHP warnings cause test failures.
+The suites use isolated SQLite databases, including a temporary file to verify that Phinx and Eloquent share the same connection settings. Migration tests check table creation, repeat runs, rollback, table prefixes, baselining an existing schema, and discovery of migrations generated from snake_case names. API tests build their schema from the real migrations, then check CRUD, JSON bodies, HTTP statuses, field validation, missing IDs, allowed methods, and error responses. They do not use your MySQL database. PHP warnings cause test failures. You can also run `php tests/migrations.php` or `php tests/run.php` separately.
 
 ## Project structure
 
 | Path | Purpose |
 | --- | --- |
 | `public/index.php` | Starts the application. |
-| `autoload.php` | Loads Composer's autoloader plus classes from paths matching their namespaces. |
 | `bootstrap.php` | Boots Eloquent and wires services in the container. |
-| `config.php` | MySQL connection settings. |
+| `config.php` | Loads `.env` and supplies shared database settings. |
+| `phinx.php` | Phinx configuration using the API's database settings. |
+| `bin/make_migration.php` | Creates migrations from snake_case names. |
 | `routes.php` | API routes mapped to controller methods. |
 | `Core/` | Application, router, request/response objects, container, and HTTP errors. |
 | `Http/Controllers/` | API information and sample CRUD handlers. |
 | `Http/Validation/` | Sample input validation. |
 | `Models/` | Eloquent models. |
 | `Repositories/` | Database queries through Eloquent. |
-| `database/schema.sql` | MySQL database and samples table setup. |
+| `database/migrations/` | Versioned database schema changes. |
+| `tests/migrations.php` | Migration lifecycle and baseline tests. |
 | `tests/run.php` | API integration tests. |
 
-If the API reports a server error, check the MySQL credentials in `config.php` and that the schema has been created. For a missing PDO driver, run `php --ini`, enable `extension=pdo_mysql` in the loaded configuration, and restart the PHP server.
+If the API reports a server error, check the MySQL credentials in `.env` and that migrations have been run. For a missing PDO driver, run `php --ini`, enable `extension=pdo_mysql` in the loaded configuration, and restart the PHP server.

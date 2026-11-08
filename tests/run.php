@@ -6,9 +6,12 @@ use Core\Response;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Schema\Blueprint;
+use Phinx\Config\Config as MigrationConfig;
+use Phinx\Migration\Manager as MigrationManager;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
 
-require_once dirname(__DIR__) . '/autoload.php';
+require_once dirname(__DIR__) . '/vendor/autoload.php';
 
 class ApiTests
 {
@@ -19,12 +22,14 @@ class ApiTests
     public function __construct()
     {
         $this->database = $this->connect();
-        $this->database->connection()->getSchemaBuilder()->create('samples', static function (Blueprint $table): void {
-            $table->increments('id');
-            $table->string('name');
-            $table->text('description')->nullable();
-            $table->timestamps();
-        });
+        $config = require dirname(__DIR__) . '/phinx.php';
+        $config['environments']['default_migration_table'] = 'phinxlog';
+        $config['environments']['development'] = [
+            'name' => ':memory:',
+            'connection' => $this->database->connection()->getPdo(),
+        ];
+        $migrations = new MigrationManager(new MigrationConfig($config), new ArrayInput([]), new NullOutput());
+        $migrations->migrate('development');
 
         // A separate empty database, so queries fail the way an unreachable server would.
         $this->unreachable = $this->connect();
