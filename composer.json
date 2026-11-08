@@ -1,0 +1,22 @@
+{
+    "name": "demo/crud-template",
+    "description": "API-only PHP CRUD template using Eloquent ORM",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "illuminate/database": "^12.0",
+        "vlucas/phpdotenv": "^5.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "Core\\": "Core/",
+            "Http\\": "Http/",
+            "Models\\": "Models/",
+            "Repositories\\": "Repositories/"
+        }
+    },
+    "config": {
+        "sort-packages": true
+    }
+}
