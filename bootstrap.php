@@ -10,11 +10,7 @@ use Http\Validation\SampleValidator;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Repositories\SampleRepository;
 
-require_once __DIR__ . '/autoload.php';
-
-if (is_file(__DIR__ . '/.env')) {
-    Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
-}
+require_once __DIR__ . '/vendor/autoload.php';
 
 $config = require __DIR__ . '/config.php';
 

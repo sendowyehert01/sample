@@ -6,6 +6,7 @@
     "require": {
         "php": ">=8.2",
         "illuminate/database": "^12.0",
+        "robmorgan/phinx": "^0.16.12",
         "vlucas/phpdotenv": "^5.8"
     },
     "autoload": {
@@ -17,6 +18,19 @@
         }
     },
     "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
         "sort-packages": true
+    },
+    "scripts": {
+        "make:migration": "@php bin/make_migration.php --configuration=phinx.php",
+        "migrate": "@php vendor/bin/phinx migrate --configuration=phinx.php",
+        "migrate:status": "@php vendor/bin/phinx status --configuration=phinx.php",
+        "migrate:rollback": "@php vendor/bin/phinx rollback --configuration=phinx.php",
+        "test": [
+            "@php tests/migrations.php",
+            "@php tests/run.php"
+        ]
     }
 }
